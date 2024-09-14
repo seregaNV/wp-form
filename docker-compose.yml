@@ -1,0 +1,73 @@
+version: "3.9"
+#  docker compose up;
+# - ds wp
+
+networks:
+  form-wp:
+
+services:
+  wp_mysql:
+    image: mysql:8.0
+    container_name: mysql8_form
+    restart: always
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./.srv/database:/var/lib/mysql
+    # необхідний набор змінних
+    environment:
+      MYSQL_ROOT_PASSWORD: wordpress
+      MYSQL_DATABASE: form-wp
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+    networks:
+      - form-wp
+
+  # http://localhost:8080/
+  wordpress:
+    image: wordpress:latest
+    container_name: wp_form
+    depends_on:
+      - wp_mysql
+    links:
+      - wp_mysql
+    restart: always
+    ports:
+      - '8080:80'
+    # необхідний набор змінних
+    environment:
+      WORDPRESS_DB_HOST: wp_mysql:3306
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: form-wp
+      WORDPRESS_DEBUG: 1
+    volumes:
+      # цей volume для того, щоб wordpress з цієї папки брати і ставити в інтерпретатор, на сам сервер
+      # тепер можемо вносити зміни в теми або плагіни і вони будуть доступні в контейнері без його перезапуску
+      - ./.srv/wordpress:/var/www/html
+      # монтуємо теми в контейнер
+      - ./themes/mytheme/:/var/www/html/wp-content/themes/mytheme
+      # монтуємо плагіни в контейнер
+      - ./plugin/:/var/www/html/wp-content/plugins/my-core
+      # монтуємо конфіги для php в контейнер
+      - ./.srv/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+    networks:
+      - form-wp
+
+  # http://localhost:8181/
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin_form
+    depends_on:
+      - wp_mysql
+    links:
+      - wp_mysql
+    ports:
+      - '8181:80'
+    environment:
+      MYSQL_USERNAME: wordpress
+      MYSQL_ROOT_PASSWORD: wordpress
+      PMA_HOST: wp_mysql
+    restart: always
+    networks:
+      - form-wp
