@@ -4,6 +4,4 @@ tmp.*
 coverage/
 data/
 .vscode
-/.srv/*
-!/.srv/wordpress/*
-!/.srv/custom.ini
+/.build/*

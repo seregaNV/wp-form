@@ -1,60 +1,88 @@
 version: "3.9"
-#  docker compose up;
+# todo:
+# - змінити конфіги з '%skeleton%' на щось інше (тут + конфіги nginx)
+# - додати в хости (файл `/etc/hosts`)
+#     sudo -- sh -c -e "echo '\n127.0.0.1 form.wp-test.com' >> /etc/hosts";
+#     sudo -- sh -c -e "echo '\n127.0.0.1 my-admin.wp-test.com' >> /etc/hosts";
+
+# - docker compose up;
 # - ds wp
 
+# http://form.wp-test.com/
+# http://my-admin.wp-test.com
+
 networks:
-  form-wp:
+  wp_form:
+    name: wp_form
+    driver: bridge
 
 services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx_form
+    hostname: form.wp-test.com
+    domainname: wp-test.com
+    privileged: true
+    depends_on:
+      - wordpress
+    restart: unless-stopped
+    networks:
+      - wp_form
+    ports:
+      - '80:80'
+    volumes:
+      # цей volume для того, щоб nginx з цієї папки брав і ставити в інтерпретатор, на сам сервер
+      - ./.build/wordpress:/var/www/html
+      - ./.build/log/nginx:/var/log/nginx
+      - ./src/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf
+
   wp_mysql:
     image: mysql:8.0
     container_name: mysql8_form
-    restart: always
-    ports:
-      - '3306:3306'
+    restart: unless-stopped
+    networks:
+      - wp_form
+    #    ports:
+    #      - '3306:3306'
     volumes:
-      - ./.srv/database:/var/lib/mysql
-    # необхідний набор змінних
+      - ./.build/database:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: wordpress
-      MYSQL_DATABASE: form-wp
+      MYSQL_DATABASE: wp_form
       MYSQL_USER: wordpress
       MYSQL_PASSWORD: wordpress
-    networks:
-      - form-wp
 
-  # http://localhost:8080/
+  # http://form.wp-test.com/
   wordpress:
-    image: wordpress:latest
+    image: wordpress:fpm
     container_name: wp_form
     depends_on:
       - wp_mysql
     links:
       - wp_mysql
-    restart: always
-    ports:
-      - '8080:80'
-    # необхідний набор змінних
+    restart: unless-stopped
+    networks:
+      - wp_form
+#    ports:
+#      - '8080:80'
     environment:
       WORDPRESS_DB_HOST: wp_mysql:3306
       WORDPRESS_DB_USER: wordpress
       WORDPRESS_DB_PASSWORD: wordpress
-      WORDPRESS_DB_NAME: form-wp
+      WORDPRESS_DB_NAME: wp_form
       WORDPRESS_DEBUG: 1
     volumes:
       # цей volume для того, щоб wordpress з цієї папки брати і ставити в інтерпретатор, на сам сервер
       # тепер можемо вносити зміни в теми або плагіни і вони будуть доступні в контейнері без його перезапуску
-      - ./.srv/wordpress:/var/www/html
-      # монтуємо теми в контейнер
-      - ./themes/mytheme/:/var/www/html/wp-content/themes/mytheme
-      # монтуємо плагіни в контейнер
-      - ./plugin/:/var/www/html/wp-content/plugins/my-core
+      - ./.build/wordpress:/var/www/html
       # монтуємо конфіги для php в контейнер
-      - ./.srv/custom.ini:/usr/local/etc/php/conf.d/custom.ini
-    networks:
-      - form-wp
+      - ./src/php-custom.ini:/usr/local/etc/php/conf.d/custom.ini
+      # монтуємо теми в контейнер
+      # - ./src/themes/mytheme/:/var/www/html/wp-content/themes/mytheme
+      # монтуємо плагіни в контейнер
+      # - ./src/plugin/:/var/www/html/wp-content/plugins/my-core
 
-  # http://localhost:8181/
+  # http://my-admin.wp-test.com
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: phpmyadmin_form
@@ -62,12 +90,12 @@ services:
       - wp_mysql
     links:
       - wp_mysql
-    ports:
-      - '8181:80'
+    networks:
+      - wp_form
+#    ports:
+#      - '8181:80'
     environment:
       MYSQL_USERNAME: wordpress
       MYSQL_ROOT_PASSWORD: wordpress
       PMA_HOST: wp_mysql
-    restart: always
-    networks:
-      - form-wp
+    restart: unless-stopped
